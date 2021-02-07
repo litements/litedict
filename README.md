@@ -8,9 +8,13 @@ You can use this to implement a persistent dictionary. It also uses some SQLite 
 
 ## Installation
 
+```
+pip install litedict
+```
+
 ## Alternatives
 
-* [RaRe-Technologies/sqlitedict](https://github.com/RaRe-Technologies/sqlitedict): This library uses a separate writing thread. Modern versions of SQLite are thread safe by default (serialized), so a separate writing thread is not strictly needed. It can be helpful to avoid DB locks, but it also adds extra complexity. The implementation is also missing some performance optimizations that are present in this repository.
+* [RaRe-Technologies/sqlitedict](https://github.com/RaRe-Technologies/sqlitedict): This library uses a separate writing thread. Modern versions of SQLite are thread safe by default (serialized), so a separate writing thread is not strictly needed. It can be helpful to avoid DB locks, but it also adds extra complexity. That implementation is also missing some performance optimizations that are present in this repository.
 
 ## Examples
 
