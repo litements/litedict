@@ -17,4 +17,4 @@ jobs:
         run: |
           pip install jupyterlab nbconvert
       - name: runtests
-        run: jupyter nbconvert --execute tests.ipynb --to script
+        run: jupyter nbconvert --execute tests.ipynb --to notebook
