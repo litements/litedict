@@ -71,12 +71,13 @@ d[TEST_2] = 2
 assert d[TEST_1] + d[TEST_2] == 3
 ```
 
-**Benchmarks**
+## Benchmarks
 
 
 ```python
 from string import ascii_lowercase, printable
 from random import choice
+import random
 
 
 def random_string(string_length=10, fuzz=False, space=False):
@@ -86,10 +87,26 @@ def random_string(string_length=10, fuzz=False, space=False):
     if fuzz:
         letters = printable
     return "".join(choice(letters) for i in range(string_length))
+```
 
+
+```python
 import gc
 
-d = SQLDict(":memory:")
+import pickle
+
+import json
+```
+
+**Pickle**
+
+
+```python
+d = SQLDict(
+    ":memory:",
+    encoder=lambda x: pickle.dumps(x).hex(),
+    decoder=lambda x: pickle.loads(bytes.fromhex(x)),
+)
 
 gc.collect()
 
@@ -99,8 +116,88 @@ d[random_string(8)] = random_string(50)
 
 d.get(random_string(8), None)
 
-# 81.5 µs ± 14 µs per loop (mean ± std. dev. of 10 runs, 20000 loops each)
+# 69.2 µs ± 4.84 µs per loop (mean ± std. dev. of 10 runs, 20000 loops each)
+```
 
+**Noop**
+
+```python
+d = SQLDict(
+    ":memory:",
+    encoder=lambda x: x,
+    decoder=lambda x: x,
+)
+
+gc.collect()
+
+# %%timeit -n20000 -r10
+
+d[random_string(8)] = random_string(50)
+
+d.get(random_string(8), None)
+
+# 66.8 µs ± 2.41 µs per loop (mean ± std. dev. of 10 runs, 20000 loops each)
+```
+
+**JSON**
+
+```python
+d = SQLDict(
+    ":memory:",
+    encoder=lambda x: json.dumps(x),
+    decoder=lambda x: json.loads(x),
+)
+
+gc.collect()
+
+# %%timeit -n20000 -r10
+
+d[random_string(8)] = random_string(50)
+
+d.get(random_string(8), None)
+
+# 68.6 µs ± 3.07 µs per loop (mean ± std. dev. of 10 runs, 20000 loops each)
+```
+
+**Pickle Python obj**
+
+
+```python
+d = SQLDict(
+    ":memory:",
+    encoder=lambda x: pickle.dumps(x).hex(),
+    decoder=lambda x: pickle.loads(bytes.fromhex(x)),
+)
+
+gc.collect()
+
+class C:
+    def __init__(self, x):
+        self.x = x
+
+    def pp(self):
+        return x
+
+    def f(self):
+        def _f(y):
+            return y * self.x ** 2
+
+        return _f
+
+# %%timeit -n20000 -r10
+
+d[random_string(8)] = C(random.randint(1, 200))
+
+d.get(random_string(8), None)
+
+# 41.1 µs ± 2.75 µs per loop (mean ± std. dev. of 10 runs, 20000 loops each)
+```
+
+
+**Dictionary**
+
+
+```python
 d = {}
 
 gc.collect()
@@ -111,9 +208,10 @@ d[random_string(8)] = random_string(50)
 
 d.get(random_string(8), None)
 
-# 54.9 µs ± 3.16 µs per loop (mean ± std. dev. of 10 runs, 20000 loops each)
+# 53.1 µs ± 4.42 µs per loop (mean ± std. dev. of 10 runs, 20000 loops each)
 ```
-    
+
+
 ## Meta
 
 
