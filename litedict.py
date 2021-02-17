@@ -6,7 +6,7 @@ import sqlite3
 from operator import itemgetter
 from contextlib import contextmanager
 
-__version__ = "0.1"
+__version__ = "0.1.1"
 
 # SQLite works better in autocommit mode when using short DML (INSERT / UPDATE / DELETE) statements
 # source: https://charlesleifer.com/blog/going-fast-with-sqlite-and-python/
