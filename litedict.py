@@ -1,12 +1,28 @@
 from collections.abc import MutableMapping
+import pathlib
 import json
-import pprint
-from typing import Callable, Tuple, Dict
+from typing import Callable
 import sqlite3
 from operator import itemgetter
 from contextlib import contextmanager
 
-__version__ = "0.1.1"
+# The __init__ function and the following imports are adapted
+# from sqlite-utils by Simon Willison (@simonw)
+# written under the Apache 2 LICENSE
+# https://github.com/simonw/sqlite-utils/blob/main/sqlite_utils/db.py
+
+try:
+    import pysqlite3 as sqlite3
+    import pysqlite3.dbapi2
+
+    OperationalError = pysqlite3.dbapi2.OperationalError
+except ImportError:
+    import sqlite3
+
+    OperationalError = sqlite3.OperationalError
+
+
+__version__ = "0.2"
 
 # SQLite works better in autocommit mode when using short DML (INSERT / UPDATE / DELETE) statements
 # source: https://charlesleifer.com/blog/going-fast-with-sqlite-and-python/
@@ -27,21 +43,25 @@ def transaction(conn: sqlite3.Connection):
 class SQLDict(MutableMapping):
     def __init__(
         self,
-        dbname,
-        check_same_thread=False,
-        fast=True,
+        filename_or_conn=None,
+        memory=False,
         encoder: Callable = lambda x: json.dumps(x),
         decoder: Callable = lambda x: json.loads(x),
         **kwargs,
     ):
-        self.dbname = dbname
+        assert (filename_or_conn is not None and not memory) or (
+            filename_or_conn is None and memory
+        ), "Either specify a filename_or_conn or pass memory=True"
+        if memory or filename_or_conn == ":memory:":
+            self.conn = sqlite3.connect(":memory:", isolation_level=None, **kwargs)
+        elif isinstance(filename_or_conn, (str, pathlib.Path)):
+            self.conn = sqlite3.connect(
+                str(filename_or_conn), isolation_level=None, **kwargs
+            )
+        else:
+            self.conn = filename_or_conn
+            self.conn.isolation_level = None
 
-        self.conn = sqlite3.connect(
-            self.dbname,
-            check_same_thread=check_same_thread,
-            isolation_level=None,
-            **kwargs,
-        )
         self.encoder = encoder
         self.decoder = decoder
 
@@ -51,11 +71,11 @@ class SQLDict(MutableMapping):
                 "CREATE TABLE IF NOT EXISTS Dict (key text NOT NULL PRIMARY KEY, value text)"
             )
 
-        if fast:
-            self.conn.execute("PRAGMA journal_mode = 'WAL';")
-            self.conn.execute("PRAGMA temp_store = 2;")
-            self.conn.execute("PRAGMA synchronous = 1;")
-            self.conn.execute(f"PRAGMA cache_size = {-1 * 64_000};")
+        # if fast:
+        self.conn.execute("PRAGMA journal_mode = 'WAL';")
+        self.conn.execute("PRAGMA temp_store = 2;")
+        self.conn.execute("PRAGMA synchronous = 1;")
+        self.conn.execute(f"PRAGMA cache_size = {-1 * 64_000};")
 
     def __setitem__(self, key, value):
 
@@ -85,9 +105,7 @@ class SQLDict(MutableMapping):
         return map(itemgetter(0), c.fetchall())
 
     def __repr__(self):
-        return (
-            f"{type(self).__name__}(dbname={self.dbname!r}, items={list(self.items())})"
-        )
+        return f"{type(self).__name__}(Connection={self.conn!r}, items={list(self.items())})"
 
     def glob(self, pat: str):
         c = self.conn.execute("SELECT value FROM Dict WHERE Key GLOB ?", (pat,))
