@@ -22,22 +22,7 @@ except ImportError:
     OperationalError = sqlite3.OperationalError
 
 
-__version__ = "0.2"
-
-# SQLite works better in autocommit mode when using short DML (INSERT / UPDATE / DELETE) statements
-# source: https://charlesleifer.com/blog/going-fast-with-sqlite-and-python/
-@contextmanager
-def transaction(conn: sqlite3.Connection):
-    # We must issue a "BEGIN" explicitly when running in auto-commit mode.
-    conn.execute("BEGIN")
-    try:
-        # Yield control back to the caller.
-        yield conn
-    except:
-        conn.rollback()  # Roll back all changes if an exception occurs.
-        raise
-    else:
-        conn.commit()
+__version__ = "0.3"
 
 
 class SQLDict(MutableMapping):
@@ -65,9 +50,9 @@ class SQLDict(MutableMapping):
         self.encoder = encoder
         self.decoder = decoder
 
-        with transaction(self.conn) as c:
+        with self.transaction():
             # WITHOUT ROWID?
-            c.execute(
+            self.conn.execute(
                 "CREATE TABLE IF NOT EXISTS Dict (key text NOT NULL PRIMARY KEY, value text)"
             )
 
@@ -113,6 +98,24 @@ class SQLDict(MutableMapping):
         if rows is None:
             raise KeyError(pat)
         return [self.decoder(x[0]) for x in rows]
+
+    # SQLite works better in autocommit mode when using short DML (INSERT / UPDATE / DELETE) statements
+    # source: https://charlesleifer.com/blog/going-fast-with-sqlite-and-python/
+    @contextmanager
+    def transaction(self, mode="DEFERRED"):
+
+        if mode not in {"DEFERRED", "IMMEDIATE", "EXCLUSIVE"}:
+            raise ValueError(f"Transaction mode '{mode}' is not valid")
+        # We must issue a "BEGIN" explicitly when running in auto-commit mode.
+        self.conn.execute(f"BEGIN {mode}")
+        try:
+            # Yield control back to the caller.
+            yield
+        except:
+            self.conn.rollback()  # Roll back all changes if an exception occurs.
+            raise
+        else:
+            self.conn.commit()
 
     def vacuum(self):
         self.conn.execute("VACUUM;")

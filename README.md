@@ -41,6 +41,11 @@ assert d[TEST_1] == "asdfoobar"
 del d[TEST_1]
 
 assert d.get(TEST_1, None) is None
+
+# execute multiple instructions inside a transaction
+with d.transaction():
+    d["asd"] = "efg"
+    d["foo"] = "bar"
 ```
 
 Glob matching
@@ -210,6 +215,11 @@ d.get(random_string(8), None)
 
 # 53.1 µs ± 4.42 µs per loop (mean ± std. dev. of 10 runs, 20000 loops each)
 ```
+
+## Changelog
+
+* 0.3
+	* Add transactions as part of the dictionary 
 
 
 ## Meta
