@@ -22,7 +22,7 @@ except ImportError:
     OperationalError = sqlite3.OperationalError
 
 
-__version__ = "0.4.1"
+__version__ = "0.4.2"
 
 
 class SQLDict(MutableMapping):
@@ -60,7 +60,7 @@ class SQLDict(MutableMapping):
         with self.transaction():
             # WITHOUT ROWID?
             self.conn.execute(
-                "CREATE TABLE IF NOT EXISTS Dict (key text NOT NULL PRIMARY KEY, value text)"
+                "CREATE TABLE IF NOT EXISTS Dict (key text NOT NULL PRIMARY KEY, value)"
             )
 
         # if fast:
