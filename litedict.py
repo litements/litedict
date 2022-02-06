@@ -2,7 +2,7 @@ from collections.abc import MutableMapping
 import pathlib
 import json
 from typing import Callable
-import sqlite3
+import logging
 from operator import itemgetter
 from contextlib import contextmanager
 
@@ -34,6 +34,9 @@ class SQLDict(MutableMapping):
         decoder: Callable = lambda x: json.loads(x),
         **kwargs,
     ):
+
+        self.conn: sqlite3.Connection
+
         assert (filename_or_conn is not None and not memory) or (
             filename_or_conn is None and memory
         ), "Either specify a filename_or_conn or pass memory=True"
@@ -45,10 +48,14 @@ class SQLDict(MutableMapping):
             )
         else:
             self.conn = filename_or_conn
+            assert self.conn
             self.conn.isolation_level = None
 
         self.encoder = encoder
         self.decoder = decoder
+
+        # store kwargs to pass them to new connections (used during backups)
+        self._init_kwargs = kwargs
 
         with self.transaction():
             # WITHOUT ROWID?
@@ -89,6 +96,22 @@ class SQLDict(MutableMapping):
         c = self.conn.execute("SELECT key FROM Dict")
         return map(itemgetter(0), c.fetchall())
 
+    def keys(self):
+        c = self.conn.execute("SELECT key FROM Dict")
+        for row in c:
+            yield row[0]
+        return map(itemgetter(0), c.fetchall())
+
+    def values(self):
+        c = self.conn.execute("SELECT value FROM Dict")
+        for row in c:
+            yield row[0]
+
+    def items(self):
+        c = self.conn.execute("SELECT key, value FROM Dict")
+        for row in c:
+            yield (row[0], row[1])
+
     def __repr__(self):
         return f"{type(self).__name__}(Connection={self.conn!r}, items={list(self.items())})"
 
@@ -111,11 +134,46 @@ class SQLDict(MutableMapping):
         try:
             # Yield control back to the caller.
             yield
-        except:
+        except BaseException:
             self.conn.rollback()  # Roll back all changes if an exception occurs.
             raise
         else:
             self.conn.commit()
+
+    def to_memory(self):
+        """
+        Copy to memory.
+
+        This closes the current connection and substitutes
+        it with another in-memory one.
+        """
+
+        def progress(status, remaining, total):
+            logging.info(f"Copied {total-remaining} of {total} pages...")
+
+        dest = sqlite3.connect(":memory:", isolation_level=None, **self._init_kwargs)
+        self.conn.backup(dest, progress=progress)
+        self.conn.close()
+        self.conn = dest
+        return self
+
+    def to_disk(self, new_db_or_conn):
+        """
+        Copy to disk file.
+
+        This closes the current connection and substitutes
+        it with another file-based one.
+        """
+
+        def progress(status, remaining, total):
+            logging.info(f"Copied {total-remaining} of {total} pages...")
+
+        dest = sqlite3.connect(
+            new_db_or_conn, isolation_level=None, **self._init_kwargs
+        )
+        self.conn.backup(dest, progress=progress)
+        self.conn = dest
+        return self
 
     def vacuum(self):
         self.conn.execute("VACUUM;")
