@@ -22,7 +22,7 @@ except ImportError:
     OperationalError = sqlite3.OperationalError
 
 
-__version__ = "0.4"
+__version__ = "0.4.1"
 
 
 class SQLDict(MutableMapping):
