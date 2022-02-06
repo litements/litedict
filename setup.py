@@ -22,6 +22,8 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/litements/litedict",
     py_modules=["litedict"],
-    classifiers=["Operating System :: OS Independent",],
-    python_requires=">=3.6",
+    classifiers=[
+        "Operating System :: OS Independent",
+    ],
+    python_requires=">=3.7",
 )
