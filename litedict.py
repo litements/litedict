@@ -22,7 +22,7 @@ except ImportError:
     OperationalError = sqlite3.OperationalError
 
 
-__version__ = "0.4.2"
+__version__ = "0.5"
 
 
 class SQLDict(MutableMapping):
@@ -93,27 +93,24 @@ class SQLDict(MutableMapping):
         return next(self.conn.execute("SELECT COUNT(*) FROM Dict"))[0]
 
     def __iter__(self):
-        c = self.conn.execute("SELECT key FROM Dict")
-        return map(itemgetter(0), c.fetchall())
+        for row in self.conn.execute("SELECT key FROM Dict"):
+            yield row[0]
 
     def keys(self):
-        c = self.conn.execute("SELECT key FROM Dict")
-        for row in c:
+        for row in self.conn.execute("SELECT key FROM Dict"):
             yield row[0]
-        return map(itemgetter(0), c.fetchall())
 
     def values(self):
-        c = self.conn.execute("SELECT value FROM Dict")
-        for row in c:
-            yield row[0]
+        for row in self.conn.execute("SELECT value FROM Dict"):
+            yield self.decoder(row[0])
 
     def items(self):
         c = self.conn.execute("SELECT key, value FROM Dict")
         for row in c:
-            yield (row[0], row[1])
+            yield (row[0], self.decoder(row[1]))
 
     def __repr__(self):
-        return f"{type(self).__name__}(Connection={self.conn!r}, items={list(self.items())})"
+        return f"{type(self).__name__}(Connection={self.conn!r}, items={len(self)})"
 
     def glob(self, pat: str):
         c = self.conn.execute("SELECT value FROM Dict WHERE Key GLOB ?", (pat,))
