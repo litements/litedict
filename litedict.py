@@ -30,6 +30,7 @@ class SQLDict(MutableMapping):
         self,
         filename_or_conn=None,
         memory=False,
+        writeback=False,
         encoder: Callable = lambda x: json.dumps(x),
         decoder: Callable = lambda x: json.loads(x),
         **kwargs,
@@ -53,6 +54,8 @@ class SQLDict(MutableMapping):
 
         self.encoder = encoder
         self.decoder = decoder
+        self.writeback = writeback
+        self._writeback = {}
 
         # store kwargs to pass them to new connections (used during backups)
         self._init_kwargs = kwargs
@@ -70,22 +73,30 @@ class SQLDict(MutableMapping):
         self.conn.execute(f"PRAGMA cache_size = {-1 * 64_000};")
 
     def __setitem__(self, key, value):
-
+        if self.writeback:
+            self._writeback[key] = value
         self.conn.execute(
             "INSERT OR REPLACE INTO  Dict VALUES (?, ?)", (key, self.encoder(value))
         )
 
     def __getitem__(self, key):
-        c = self.conn.execute("SELECT value FROM Dict WHERE Key=?", (key,))
-        row = c.fetchone()
-        if row is None:
-            raise KeyError(key)
-        return self.decoder(row[0])
+        try:
+            value = self._writeback[key]
+        except KeyError:
+            c = self.conn.execute("SELECT value FROM Dict WHERE Key=?", (key,))
+            row = c.fetchone()
+            if row is None:
+                raise KeyError(key)
+            value = self.decoder(row[0])
+            if self.writeback:
+                self._writeback[key] = value
+        return value
 
     def __delitem__(self, key):
-
+        self._writeback.pop(key,None) # Will not fail even if missing
         if key not in self:
             raise KeyError(key)
+        
 
         self.conn.execute("DELETE FROM Dict WHERE key=?", (key,))
 
@@ -113,11 +124,15 @@ class SQLDict(MutableMapping):
         return f"{type(self).__name__}(Connection={self.conn!r}, items={len(self)})"
 
     def glob(self, pat: str):
-        c = self.conn.execute("SELECT value FROM Dict WHERE Key GLOB ?", (pat,))
-        rows = c.fetchall()
-        if rows is None:
+        c = self.conn.execute("SELECT Key FROM Dict WHERE Key GLOB ?", (pat,))
+        keys = c.fetchall()
+        if keys is None:
             raise KeyError(pat)
-        return [self.decoder(x[0]) for x in rows]
+        return [self[key[0]] for key in keys]
+    
+    def sync(self):
+        for key,val in self._writeback.items():
+            self[key] = val
 
     # SQLite works better in autocommit mode when using short DML (INSERT / UPDATE / DELETE) statements
     # source: https://charlesleifer.com/blog/going-fast-with-sqlite-and-python/
@@ -176,4 +191,5 @@ class SQLDict(MutableMapping):
         self.conn.execute("VACUUM;")
 
     def close(self):
+        self.sync()
         self.conn.close()

@@ -216,6 +216,56 @@ d.get(random_string(8), None)
 # 53.1 µs ± 4.42 µs per loop (mean ± std. dev. of 10 runs, 20000 loops each)
 ```
 
+## Writeback Cache
+
+Inspired by the writeback cache of [shelve](https://docs.python.org/3/library/shelve.html), litedict optionally implements a writeback cache (defaults to False). This enables mutating mutable objects by keeping a cache of all entries accessed and writing them back upon `d.close()` or `d.sync()`. 
+
+Consider the following examples:
+
+This will *not* save the values mutated:
+
+```python
+d = SQLDict("example.db",writeback=False)
+d['mylist'] = []
+d['mylist'].append('myitem')
+print(d['mylist']) # output: []
+```
+
+This *will* mutate the item and then save it upon `d.close()` to be read again
+
+```python
+d = SQLDict("example.db",writeback=True)
+d['mylist'] = []
+d['mylist'].append('myitem')
+print(d['mylist']) # output: ['myitem']
+
+d.close()
+
+d = SQLDict("example.db",writeback=True)
+print(d['mylist']) # output: ['myitem']
+```
+
+Finally, to achieve the save thing without `writeback=True` you could do the following:
+
+```python
+d = SQLDict("example.db",writeback=False)
+d['mylist'] = []
+
+mylist = d['mylist']
+mylist.append('myitem')
+
+d['mylist'] =  mylist # This saves the item
+print(d['mylist']) # output: ['myitem']
+
+# Good practice is to call d.close() but it is commented out
+# to demonstrate that you don't even need it since it is written above
+
+d2 = SQLDict("example.db",writeback=True)
+print(d2['mylist']) # output: ['myitem']
+```
+
+
+
 ## Changelog
 
 * 0.3
